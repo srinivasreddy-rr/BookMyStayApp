@@ -1,5 +1,4 @@
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 // Abstract Room Class (Domain Model)
 abstract class Room {
@@ -46,81 +45,62 @@ class SuiteRoom extends Room {
     }
 }
 
-// Centralized Inventory Class
+// Centralized Inventory (State Holder)
 class RoomInventory {
     private HashMap<String, Integer> inventory;
 
-    // Constructor initializes inventory (Single Source of Truth)
     public RoomInventory() {
         inventory = new HashMap<>();
         inventory.put("Single Room", 5);
-        inventory.put("Double Room", 3);
+        inventory.put("Double Room", 0); // example unavailable
         inventory.put("Suite Room", 2);
     }
 
-    // Get availability (O(1))
+    // Read-only access
     public int getAvailability(String roomType) {
         return inventory.getOrDefault(roomType, 0);
     }
+}
 
-    // Update availability (controlled update)
-    public void updateAvailability(String roomType, int change) {
-        int current = inventory.getOrDefault(roomType, 0);
-        int updated = current + change;
+// Search Service (Read-only operations)
+class RoomSearchService {
 
-        if (updated < 0) {
-            System.out.println("Cannot reduce below 0 for " + roomType);
-            return;
-        }
+    public void searchAvailableRooms(List<Room> rooms, RoomInventory inventory) {
+        System.out.println("=== Available Rooms ===\n");
 
-        inventory.put(roomType, updated);
-    }
+        for (Room room : rooms) {
+            int available = inventory.getAvailability(room.getType());
 
-    // Display full inventory
-    public void displayInventory() {
-        System.out.println("\n=== Current Inventory ===");
-        for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
-            System.out.println(entry.getKey() + " Available: " + entry.getValue());
+            // Validation: show only available rooms
+            if (available > 0) {
+                room.displayDetails();
+                System.out.println("Available: " + available);
+                System.out.println("----------------------");
+            }
         }
     }
 }
 
-// Main Application
+// Main Class
 public class BookMyStayApp {
     public static void main(String[] args) {
 
-        // Create Room Objects (Polymorphism)
-        Room single = new SingleRoom();
-        Room doub = new DoubleRoom();
-        Room suite = new SuiteRoom();
+        // Create room objects
+        List<Room> rooms = new ArrayList<>();
+        rooms.add(new SingleRoom());
+        rooms.add(new DoubleRoom());
+        rooms.add(new SuiteRoom());
 
-        // Initialize Inventory
+        // Initialize inventory
         RoomInventory inventory = new RoomInventory();
 
-        // Display Room Details with Availability
-        System.out.println("=== Room Details ===\n");
+        // Initialize search service
+        RoomSearchService searchService = new RoomSearchService();
 
-        single.displayDetails();
-        System.out.println("Available: " + inventory.getAvailability(single.getType()));
-        System.out.println("----------------------");
+        // Guest searches for rooms (READ-ONLY)
+        searchService.searchAvailableRooms(rooms, inventory);
 
-        doub.displayDetails();
-        System.out.println("Available: " + inventory.getAvailability(doub.getType()));
-        System.out.println("----------------------");
-
-        suite.displayDetails();
-        System.out.println("Available: " + inventory.getAvailability(suite.getType()));
-        System.out.println("----------------------");
-
-        // Simulate booking
-        System.out.println("\nBooking 1 Single Room...");
-        inventory.updateAvailability("Single Room", -1);
-
-        // Simulate cancellation
-        System.out.println("Cancelling 1 Double Room...");
-        inventory.updateAvailability("Double Room", +1);
-
-        // Show updated inventory
-        inventory.displayInventory();
+        // Verify no state change
+        System.out.println("\n(Search completed - inventory remains unchanged)");
     }
 }
