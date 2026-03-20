@@ -1,43 +1,59 @@
-package src; //// Abstract Class
-abstract class Room {
-    private String type;
-    private int beds;
-    private double size;
-    private double price;
+import java.util.*;
 
-    public Room(String type, int beds, double size, double price) {
-        this.type = type;
-        this.beds = beds;
-        this.size = size;
-        this.price = price;
+// Reservation Class (Represents a booking request)
+class Reservation {
+    private String guestName;
+    private String roomType;
+
+    public Reservation(String guestName, String roomType) {
+        this.guestName = guestName;
+        this.roomType = roomType;
     }
 
-    public void displayDetails() {
-        System.out.println("Room Type: " + type);
-        System.out.println("Beds: " + beds);
-        System.out.println("Size: " + size + " sq ft");
-        System.out.println("Price: $" + price + " per night");
+    public String getGuestName() {
+        return guestName;
     }
-}
 
-// Single Room
-class SingleRoom extends Room {
-    public SingleRoom() {
-        super("Single Room", 1, 200, 100);
+    public String getRoomType() {
+        return roomType;
+    }
+
+    public void display() {
+        System.out.println("Guest: " + guestName + " | Requested Room: " + roomType);
     }
 }
 
-// Double Room
-class DoubleRoom extends Room {
-    public DoubleRoom() {
-        super("Double Room", 2, 350, 180);
-    }
-}
+// Booking Request Queue (FIFO)
+class BookingQueue {
+    private Queue<Reservation> queue;
 
-// Suite Room
-class SuiteRoom extends Room {
-    public SuiteRoom() {
-        super("Suite Room", 3, 500, 300);
+    public BookingQueue() {
+        queue = new LinkedList<>();
+    }
+
+    // Add request (enqueue)
+    public void addRequest(Reservation reservation) {
+        queue.offer(reservation);
+        System.out.println("Request added for " + reservation.getGuestName());
+    }
+
+    // View all queued requests (read-only)
+    public void viewQueue() {
+        System.out.println("\n=== Booking Request Queue (FIFO) ===");
+
+        if (queue.isEmpty()) {
+            System.out.println("No pending requests.");
+            return;
+        }
+
+        for (Reservation r : queue) {
+            r.display();
+        }
+    }
+
+    // Peek next request (without removing)
+    public Reservation peekNext() {
+        return queue.peek();
     }
 }
 
@@ -45,27 +61,25 @@ class SuiteRoom extends Room {
 public class BookMyStayApp {
     public static void main(String[] args) {
 
-//        // Polymorphism
-        Room single = new SingleRoom();
-        Room doub = new DoubleRoom();
-        Room suite = new SuiteRoom();
-//
-        // Static availability
-        int singleAvailable = 5;
-        int doubleAvailable = 3;
-        int suiteAvailable = 2;
-//
-        System.out.println("=== Room Details ===\n");
-//
-        single.displayDetails();
-        System.out.println("Available: " + singleAvailable);
-        System.out.println("----------------------");
-//
-        doub.displayDetails();
-        System.out.println("Available: " + doubleAvailable);
-        System.out.println("----------------------");
-//
-       suite.displayDetails();
-        System.out.println("Available: " + suiteAvailable);
+        // Initialize booking queue
+        BookingQueue bookingQueue = new BookingQueue();
+
+        // Simulate guest booking requests
+        bookingQueue.addRequest(new Reservation("Alice", "Single Room"));
+        bookingQueue.addRequest(new Reservation("Bob", "Suite Room"));
+        bookingQueue.addRequest(new Reservation("Charlie", "Double Room"));
+
+        // View queue (FIFO order)
+        bookingQueue.viewQueue();
+
+        // Show next request to be processed
+        System.out.println("\nNext request to process:");
+        Reservation next = bookingQueue.peekNext();
+
+        if (next != null) {
+            next.display();
+        }
+
+        System.out.println("\n(No inventory updates done at this stage)");
     }
 }
