@@ -1,82 +1,120 @@
 import java.util.*;
 
-// Abstract Room Class (Domain Model)
-abstract class Room {
-    private String type;
-    private int beds;
-    private double size;
-    private double price;
+// Reservation (Booking Request)
+class Reservation {
+    private String guestName;
+    private String roomType;
 
-    public Room(String type, int beds, double size, double price) {
-        this.type = type;
-        this.beds = beds;
-        this.size = size;
-        this.price = price;
+    public Reservation(String guestName, String roomType) {
+        this.guestName = guestName;
+        this.roomType = roomType;
     }
 
-    public String getType() {
-        return type;
+    public String getGuestName() {
+        return guestName;
     }
 
-    public void displayDetails() {
-        System.out.println("Room Type: " + type);
-        System.out.println("Beds: " + beds);
-        System.out.println("Size: " + size + " sq ft");
-        System.out.println("Price: $" + price + " per night");
+    public String getRoomType() {
+        return roomType;
     }
 }
 
-// Concrete Room Types
-class SingleRoom extends Room {
-    public SingleRoom() {
-        super("Single Room", 1, 200, 100);
+// Booking Queue (FIFO)
+class BookingQueue {
+    private Queue<Reservation> queue = new LinkedList<>();
+
+    public void addRequest(Reservation r) {
+        queue.offer(r);
+    }
+
+    public Reservation getNextRequest() {
+        return queue.poll(); // dequeue
+    }
+
+    public boolean isEmpty() {
+        return queue.isEmpty();
     }
 }
 
-class DoubleRoom extends Room {
-    public DoubleRoom() {
-        super("Double Room", 2, 350, 180);
-    }
-}
-
-class SuiteRoom extends Room {
-    public SuiteRoom() {
-        super("Suite Room", 3, 500, 300);
-    }
-}
-
-// Centralized Inventory (State Holder)
+// Inventory Service
 class RoomInventory {
-    private HashMap<String, Integer> inventory;
+    private HashMap<String, Integer> inventory = new HashMap<>();
 
     public RoomInventory() {
-        inventory = new HashMap<>();
-        inventory.put("Single Room", 5);
-        inventory.put("Double Room", 0); // example unavailable
-        inventory.put("Suite Room", 2);
+        inventory.put("Single Room", 2);
+        inventory.put("Double Room", 1);
+        inventory.put("Suite Room", 1);
     }
 
-    // Read-only access
     public int getAvailability(String roomType) {
         return inventory.getOrDefault(roomType, 0);
     }
+
+    public void reduceAvailability(String roomType) {
+        int current = inventory.getOrDefault(roomType, 0);
+        inventory.put(roomType, current - 1);
+    }
+
+    public void displayInventory() {
+        System.out.println("\n=== Inventory Status ===");
+        for (Map.Entry<String, Integer> e : inventory.entrySet()) {
+            System.out.println(e.getKey() + ": " + e.getValue());
+        }
+    }
 }
 
-// Search Service (Read-only operations)
-class RoomSearchService {
+// Booking Service (Allocation Logic)
+class BookingService {
 
-    public void searchAvailableRooms(List<Room> rooms, RoomInventory inventory) {
-        System.out.println("=== Available Rooms ===\n");
+    private Set<String> allocatedRoomIds = new HashSet<>();
+    private HashMap<String, Set<String>> roomAllocations = new HashMap<>();
+    private int idCounter = 1;
 
-        for (Room room : rooms) {
-            int available = inventory.getAvailability(room.getType());
+    public void processBookings(BookingQueue queue, RoomInventory inventory) {
 
-            // Validation: show only available rooms
-            if (available > 0) {
-                room.displayDetails();
-                System.out.println("Available: " + available);
-                System.out.println("----------------------");
+        while (!queue.isEmpty()) {
+            Reservation request = queue.getNextRequest();
+
+            String roomType = request.getRoomType();
+            String guest = request.getGuestName();
+
+            System.out.println("\nProcessing request for " + guest + " (" + roomType + ")");
+
+            // Check availability
+            if (inventory.getAvailability(roomType) <= 0) {
+                System.out.println("❌ No rooms available for " + roomType);
+                continue;
             }
+
+            // Generate unique room ID
+            String roomId;
+            do {
+                roomId = roomType.replace(" ", "").toUpperCase() + "-" + idCounter++;
+            } while (allocatedRoomIds.contains(roomId));
+
+            // Store ID in Set (prevents duplicates)
+            allocatedRoomIds.add(roomId);
+
+            // Map room type → allocated IDs
+            roomAllocations.putIfAbsent(roomType, new HashSet<>());
+            roomAllocations.get(roomType).add(roomId);
+
+            // Reduce inventory (atomic step)
+            inventory.reduceAvailability(roomType);
+
+            // Confirm booking
+            System.out.println("✅ Booking Confirmed!");
+            System.out.println("Guest: " + guest);
+            System.out.println("Room Type: " + roomType);
+            System.out.println("Allocated Room ID: " + roomId);
+        }
+    }
+
+    // Display all allocations
+    public void displayAllocations() {
+        System.out.println("\n=== Room Allocations ===");
+        for (Map.Entry<String, Set<String>> entry : roomAllocations.entrySet()) {
+            System.out.println(entry.getKey() + " -> " + entry.getValue());
         }
     }
 }
@@ -85,22 +123,26 @@ class RoomSearchService {
 public class BookMyStayApp {
     public static void main(String[] args) {
 
-        // Create room objects
-        List<Room> rooms = new ArrayList<>();
-        rooms.add(new SingleRoom());
-        rooms.add(new DoubleRoom());
-        rooms.add(new SuiteRoom());
+        // Initialize queue
+        BookingQueue queue = new BookingQueue();
+
+        // Add booking requests (FIFO)
+        queue.addRequest(new Reservation("Alice", "Single Room"));
+        queue.addRequest(new Reservation("Bob", "Single Room"));
+        queue.addRequest(new Reservation("Charlie", "Single Room")); // will fail
+        queue.addRequest(new Reservation("David", "Suite Room"));
 
         // Initialize inventory
         RoomInventory inventory = new RoomInventory();
 
-        // Initialize search service
-        RoomSearchService searchService = new RoomSearchService();
+        // Booking service
+        BookingService bookingService = new BookingService();
 
-        // Guest searches for rooms (READ-ONLY)
-        searchService.searchAvailableRooms(rooms, inventory);
+        // Process bookings
+        bookingService.processBookings(queue, inventory);
 
-        // Verify no state change
-        System.out.println("\n(Search completed - inventory remains unchanged)");
+        // Show results
+        bookingService.displayAllocations();
+        inventory.displayInventory();
     }
 }
