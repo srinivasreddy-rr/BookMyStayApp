@@ -1,103 +1,94 @@
 import java.util.*;
 
-// Represents a Reservation
-class Reservation {
-    private String reservationId;
-    private String guestName;
-    private String roomType;
-    private double price;
+// Booking Request Model
+class BookingRequest {
+    String guestName;
+    String roomType;
 
-    public Reservation(String reservationId, String guestName, String roomType, double price) {
-        this.reservationId = reservationId;
+    public BookingRequest(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
-        this.price = price;
+    }
+}
+
+// Thread-safe Inventory Manager
+class RoomInventory {
+    private Map<String, Integer> inventory;
+
+    public RoomInventory() {
+        inventory = new HashMap<>();
+        inventory.put("Standard", 2);
+        inventory.put("Deluxe", 1);
     }
 
-    public String getReservationId() {
-        return reservationId;
+    // Critical Section (Thread-safe)
+    public synchronized boolean allocateRoom(String roomType) {
+        int available = inventory.getOrDefault(roomType, 0);
+
+        if (available > 0) {
+            System.out.println(Thread.currentThread().getName()
+                    + " allocating " + roomType);
+
+            // Simulate delay (to expose race condition if not synchronized)
+            try { Thread.sleep(100); } catch (InterruptedException e) {}
+
+            inventory.put(roomType, available - 1);
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    public String getGuestName() {
-        return guestName;
+    public void displayInventory() {
+        System.out.println("Final Inventory: " + inventory);
+    }
+}
+
+// Shared Booking Queue
+class BookingQueue {
+    private Queue<BookingRequest> queue = new LinkedList<>();
+
+    public synchronized void addRequest(BookingRequest request) {
+        queue.offer(request);
     }
 
-    public String getRoomType() {
-        return roomType;
+    public synchronized BookingRequest getRequest() {
+        return queue.poll();
     }
+}
 
-    public double getPrice() {
-        return price;
+// Worker Thread (Concurrent Booking Processor)
+class BookingProcessor extends Thread {
+    private BookingQueue queue;
+    private RoomInventory inventory;
+
+    public BookingProcessor(BookingQueue queue, RoomInventory inventory, String name) {
+        super(name);
+        this.queue = queue;
+        this.inventory = inventory;
     }
 
     @Override
-    public String toString() {
-        return "Reservation ID: " + reservationId +
-                ", Guest: " + guestName +
-                ", Room: " + roomType +
-                ", Price: ₹" + price;
-    }
-}
+    public void run() {
+        while (true) {
+            BookingRequest request;
 
-// Maintains Booking History (Chronological)
-class BookingHistory {
-    private List<Reservation> history;
+            // Fetch request safely
+            synchronized (queue) {
+                request = queue.getRequest();
+            }
 
-    public BookingHistory() {
-        history = new ArrayList<>();
-    }
+            if (request == null) break;
 
-    // Add confirmed reservation
-    public void addReservation(Reservation reservation) {
-        history.add(reservation); // maintains insertion order
-    }
+            boolean success = inventory.allocateRoom(request.roomType);
 
-    // Get all reservations
-    public List<Reservation> getAllReservations() {
-        return new ArrayList<>(history); // return copy (no modification)
-    }
-}
-
-// Generates Reports
-class BookingReportService {
-
-    // Display all bookings
-    public void displayAllBookings(List<Reservation> reservations) {
-        if (reservations.isEmpty()) {
-            System.out.println("No bookings found.");
-            return;
-        }
-
-        System.out.println("=== Booking History ===");
-        for (Reservation r : reservations) {
-            System.out.println(r);
-        }
-    }
-
-    // Generate summary report
-    public void generateSummary(List<Reservation> reservations) {
-        System.out.println("\n=== Booking Summary Report ===");
-
-        int totalBookings = reservations.size();
-        double totalRevenue = 0.0;
-
-        Map<String, Integer> roomTypeCount = new HashMap<>();
-
-        for (Reservation r : reservations) {
-            totalRevenue += r.getPrice();
-
-            roomTypeCount.put(
-                    r.getRoomType(),
-                    roomTypeCount.getOrDefault(r.getRoomType(), 0) + 1
-            );
-        }
-
-        System.out.println("Total Bookings: " + totalBookings);
-        System.out.println("Total Revenue: ₹" + totalRevenue);
-
-        System.out.println("\nRoom Type Distribution:");
-        for (Map.Entry<String, Integer> entry : roomTypeCount.entrySet()) {
-            System.out.println(entry.getKey() + ": " + entry.getValue());
+            if (success) {
+                System.out.println(getName() + " SUCCESS: "
+                        + request.guestName + " booked " + request.roomType);
+            } else {
+                System.out.println(getName() + " FAILED: "
+                        + request.guestName + " - No " + request.roomType + " available");
+            }
         }
     }
 }
@@ -107,20 +98,37 @@ public class BookMyStay {
 
     public static void main(String[] args) {
 
-        BookingHistory history = new BookingHistory();
-        BookingReportService reportService = new BookingReportService();
+        RoomInventory inventory = new RoomInventory();
+        BookingQueue queue = new BookingQueue();
 
-        // Simulating confirmed bookings
-        history.addReservation(new Reservation("RES101", "Arun", "Deluxe", 3000));
-        history.addReservation(new Reservation("RES102", "Priya", "Suite", 5000));
-        history.addReservation(new Reservation("RES103", "Karthik", "Standard", 2000));
-        history.addReservation(new Reservation("RES104", "Divya", "Deluxe", 3000));
+        // Simulate multiple guest requests (Concurrent input)
+        queue.addRequest(new BookingRequest("Arun", "Standard"));
+        queue.addRequest(new BookingRequest("Priya", "Standard"));
+        queue.addRequest(new BookingRequest("Karthik", "Standard")); // extra request
+        queue.addRequest(new BookingRequest("Divya", "Deluxe"));
+        queue.addRequest(new BookingRequest("Rahul", "Deluxe")); // extra request
 
-        // Admin views booking history
-        List<Reservation> bookings = history.getAllReservations();
-        reportService.displayAllBookings(bookings);
+        // Create multiple threads (simulate concurrent users)
+        Thread t1 = new BookingProcessor(queue, inventory, "Thread-1");
+        Thread t2 = new BookingProcessor(queue, inventory, "Thread-2");
+        Thread t3 = new BookingProcessor(queue, inventory, "Thread-3");
 
-        // Admin generates report
-        reportService.generateSummary(bookings);
+        // Start threads
+        t1.start();
+        t2.start();
+        t3.start();
+
+        // Wait for completion
+        try {
+            t1.join();
+            t2.join();
+            t3.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Final state (consistent)
+        System.out.println("\n=== FINAL STATE ===");
+        inventory.displayInventory();
     }
 }
